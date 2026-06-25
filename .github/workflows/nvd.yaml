@@ -29,22 +29,20 @@ jobs:
           mkdir -p nvd-feeds
 
           for year in $(seq $START $END); do
-            FILE="nvdcve-2.0-${year}.json.gz"
-            URL="${BASE_URL}/${FILE}"
-            OUT="nvd-feeds/${FILE}"
+          FILE="nvdcve-2.0-${year}.json.gz"
+          URL="${BASE_URL}/${FILE}"
+          OUT="nvd-feeds/${FILE}"
 
-            echo -n "Downloading ${FILE} ... "
-            HTTP_CODE=$(curl -s -o "$OUT" -w "%{http_code}" \
-              -H "apiKey: ${NVD_API_KEY}" \
-              -L "$URL")
+          echo -n "Downloading ${FILE} ... "
+          wget --header="apiKey: ${API_KEY}" -O "$OUT" "$URL"
 
-            if [[ "$HTTP_CODE" == "200" && -s "$OUT" ]]; then
-              SIZE=$(du -h "$OUT" | cut -f1)
-              echo "OK (${SIZE})"
-            else
-              echo "FAILED (HTTP $HTTP_CODE)"
-              rm -f "$OUT"
-            fi
+          if [[ $? -eq 0 && -s "$OUT" ]]; then
+            SIZE=$(du -h "$OUT" | cut -f1)
+            echo "OK (${SIZE})"
+          else
+            echo "FAILED"
+            rm -f "$OUT"
+          fi
           done
 
       - name: Commit NVD feeds
