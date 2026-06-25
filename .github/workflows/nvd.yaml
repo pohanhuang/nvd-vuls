@@ -1,0 +1,56 @@
+name: Download NVD Feeds
+
+on:
+  schedule:
+    - cron: "0 12 * * *"
+  workflow_dispatch:
+    inputs:
+      year_start:
+        description: 'Start year'
+        default: '2002'
+      year_end:
+        description: 'End year'
+        default: '2026'
+
+jobs:
+  download:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download NVD feeds
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+        run: |
+          BASE_URL="https://nvd.nist.gov/feeds/json/cve/2.0"
+          START="${{ github.event.inputs.year_start || '2002' }}"
+          END="${{ github.event.inputs.year_end || '2026' }}"
+
+          mkdir -p nvd-feeds
+
+          for year in $(seq $START $END); do
+            FILE="nvdcve-2.0-${year}.json.gz"
+            URL="${BASE_URL}/${FILE}"
+            OUT="nvd-feeds/${FILE}"
+
+            echo -n "Downloading ${FILE} ... "
+            HTTP_CODE=$(curl -s -o "$OUT" -w "%{http_code}" \
+              -H "apiKey: ${NVD_API_KEY}" \
+              -L "$URL")
+
+            if [[ "$HTTP_CODE" == "200" && -s "$OUT" ]]; then
+              SIZE=$(du -h "$OUT" | cut -f1)
+              echo "OK (${SIZE})"
+            else
+              echo "FAILED (HTTP $HTTP_CODE)"
+              rm -f "$OUT"
+            fi
+          done
+
+      - name: Commit NVD feeds
+        run: |
+          git config user.email "github-actions@github.com"
+          git config user.name "github-actions"
+          git add nvd-feeds/
+          git commit -m "update nvd feeds $(date +%Y-%m-%d)" || echo "nothing to commit"
+          git push
