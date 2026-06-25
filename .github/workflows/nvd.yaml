@@ -1,5 +1,8 @@
 name: Download NVD Feeds
 
+permissions:
+  contents: write
+
 on:
   schedule:
     - cron: "0 12 * * *"
@@ -34,7 +37,7 @@ jobs:
           OUT="nvd-feeds/${FILE}"
 
           echo -n "Downloading ${FILE} ... "
-          wget --header="apiKey: ${API_KEY}" -O "$OUT" "$URL"
+          wget --header="apiKey: ${NVD_API_KEY}" -O "$OUT" "$URL"
 
           if [[ $? -eq 0 && -s "$OUT" ]]; then
             SIZE=$(du -h "$OUT" | cut -f1)
