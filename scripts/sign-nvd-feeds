@@ -5,7 +5,7 @@ set -euo pipefail
 REF_FILE="${REF_FILE:-nvd-feeds.oci-ref}"
 
 log() {
-    echo "[sign-nvd-feeds] $*"
+    echo "[sign-nvd-feeds] $*" >&2
 }
 
 if [ ! -s "$REF_FILE" ]; then

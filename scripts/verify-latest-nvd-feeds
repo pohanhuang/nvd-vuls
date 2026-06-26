@@ -6,7 +6,7 @@ OCI_REPOSITORY="${OCI_REPOSITORY:-}"
 CERTIFICATE_OIDC_ISSUER="${CERTIFICATE_OIDC_ISSUER:-https://token.actions.githubusercontent.com}"
 
 log() {
-    echo "[verify-latest-nvd-feeds] $*"
+    echo "[verify-latest-nvd-feeds] $*" >&2
 }
 
 if [ -z "$OCI_REPOSITORY" ]; then
