@@ -51,7 +51,7 @@ log "Verifying signature on: $OCI_DIGEST_REF"
 cosign verify \
     --certificate-oidc-issuer "$CERTIFICATE_OIDC_ISSUER" \
     --certificate-identity "$CERTIFICATE_IDENTITY" \
-    "$OCI_DIGEST_REF"
+    "$OCI_DIGEST_REF" >&2
 
 log "✅ Signature verification passed"
 
@@ -61,12 +61,12 @@ TEMP_DIR=$(mktemp -d)
 trap "rm -rf $TEMP_DIR" EXIT
 
 cd "$TEMP_DIR"
-oras pull "$OCI_DIGEST_REF"
+oras pull --no-tty "$OCI_DIGEST_REF" >&2
 
 # Step 4: Verify checksum
 log "Verifying checksum"
 if [ -f merged_nvd_feeds.json.sha256 ]; then
-    sha256sum -c merged_nvd_feeds.json.sha256
+    sha256sum -c merged_nvd_feeds.json.sha256 >&2
     log "✅ Checksum verification passed"
 else
     log "⚠️  No checksum file found"

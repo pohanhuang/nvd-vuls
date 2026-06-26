@@ -45,6 +45,10 @@ jobs:
           CERTIFICATE_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/nvd.yaml@refs/heads/${{ github.event.repository.default_branch }}
         run: |
           OCI_DIGEST_REF=$(bash scripts/verify-latest-nvd-feeds)
+          if [[ ! "$OCI_DIGEST_REF" =~ ^ghcr\.io/.+@sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error::Unexpected verify output: ${OCI_DIGEST_REF}"
+            exit 1
+          fi
           echo "oci_digest=${OCI_DIGEST_REF}" >> "$GITHUB_OUTPUT"
           echo "### ✅ Verification Successful" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
