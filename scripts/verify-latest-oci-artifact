@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+CERTIFICATE_OIDC_ISSUER="${CERTIFICATE_OIDC_ISSUER:-https://token.actions.githubusercontent.com}"
+LOG_PREFIX="${LOG_PREFIX:-verify-latest-oci-artifact}"
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+
+log() {
+    echo "[$LOG_PREFIX] $*" >&2
+}
+
+if [ -z "${OCI_REPOSITORY:-}" ]; then
+    if [ -z "${GITHUB_REPOSITORY:-}" ]; then
+        log "OCI_REPOSITORY or GITHUB_REPOSITORY is required"
+        exit 1
+    fi
+    OCI_REPOSITORY="ghcr.io/${GITHUB_REPOSITORY}/artifact"
+fi
+
+OCI_REPOSITORY=$(printf '%s' "$OCI_REPOSITORY" | tr '[:upper:]' '[:lower:]')
+
+if [ -z "${CERTIFICATE_IDENTITY:-}" ]; then
+    log "CERTIFICATE_IDENTITY is required"
+    exit 1
+fi
+
+if ! command -v oras >/dev/null 2>&1; then
+    log "oras is required"
+    exit 1
+fi
+
+log "Resolving latest tag: ${OCI_REPOSITORY}:latest"
+LATEST_DIGEST=$(oras resolve "${OCI_REPOSITORY}:latest")
+
+if [ -z "$LATEST_DIGEST" ]; then
+    log "Failed to resolve latest tag"
+    exit 1
+fi
+
+OCI_DIGEST_REF="${OCI_REPOSITORY}@${LATEST_DIGEST}"
+log "Resolved to: $OCI_DIGEST_REF"
+
+OCI_REF="$OCI_DIGEST_REF" \
+CERTIFICATE_OIDC_ISSUER="$CERTIFICATE_OIDC_ISSUER" \
+LOG_PREFIX="$LOG_PREFIX" \
+bash "$SCRIPT_DIR/verify-oci-artifact"
+
+echo "$OCI_DIGEST_REF"

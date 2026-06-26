@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+REF_FILE="${REF_FILE:-oci-artifact.oci-ref}"
+OCI_REF="${OCI_REF:-}"
+CERTIFICATE_OIDC_ISSUER="${CERTIFICATE_OIDC_ISSUER:-https://token.actions.githubusercontent.com}"
+VERIFY_CONTENT="${VERIFY_CONTENT:-true}"
+EXPECTED_FILE="${EXPECTED_FILE:-}"
+VERIFY_JSON="${VERIFY_JSON:-false}"
+VERIFY_JSON_FILE="${VERIFY_JSON_FILE:-}"
+LOG_PREFIX="${LOG_PREFIX:-verify-oci-artifact}"
+
+log() {
+    echo "[$LOG_PREFIX] $*" >&2
+}
+
+if [ -z "$OCI_REF" ]; then
+    if [ ! -s "$REF_FILE" ]; then
+        log "Missing OCI ref file: $REF_FILE"
+        exit 1
+    fi
+    OCI_REF=$(cat "$REF_FILE")
+fi
+
+if [ -z "${CERTIFICATE_IDENTITY:-}" ]; then
+    log "CERTIFICATE_IDENTITY is required"
+    exit 1
+fi
+
+if ! command -v cosign >/dev/null 2>&1; then
+    log "cosign is required"
+    exit 1
+fi
+
+if [ "$VERIFY_CONTENT" = "true" ] && ! command -v oras >/dev/null 2>&1; then
+    log "oras is required when VERIFY_CONTENT=true"
+    exit 1
+fi
+
+if [ "$VERIFY_JSON" = "true" ] && ! command -v jq >/dev/null 2>&1; then
+    log "jq is required when VERIFY_JSON=true"
+    exit 1
+fi
+
+if [[ "$OCI_REF" != *@sha256:* ]]; then
+    log "OCI ref must use a digest: $OCI_REF"
+    exit 1
+fi
+
+log "Verifying OCI artifact: $OCI_REF"
+cosign verify \
+    --certificate-oidc-issuer "$CERTIFICATE_OIDC_ISSUER" \
+    --certificate-identity "$CERTIFICATE_IDENTITY" \
+    "$OCI_REF" >&2
+
+log "✅ Signature verification passed"
+
+if [ "$VERIFY_CONTENT" != "true" ]; then
+    log "Content verification skipped"
+    log "Verification complete"
+    exit 0
+fi
+
+log "Pulling artifact for content verification"
+TEMP_DIR=$(mktemp -d)
+trap "rm -rf \"$TEMP_DIR\"" EXIT
+
+cd "$TEMP_DIR"
+oras pull --no-tty "$OCI_REF" >&2
+
+if [ -n "$EXPECTED_FILE" ]; then
+    log "Checking expected file: $EXPECTED_FILE"
+    if [ ! -f "$EXPECTED_FILE" ]; then
+        log "Expected file not found: $EXPECTED_FILE"
+        exit 1
+    fi
+fi
+
+log "Verifying checksum"
+shopt -s nullglob
+checksum_files=( *.sha256 )
+shopt -u nullglob
+
+if [ "${#checksum_files[@]}" -gt 0 ]; then
+    for checksum_file in "${checksum_files[@]}"; do
+        sha256sum -c "$checksum_file" >&2
+    done
+    log "✅ Checksum verification passed"
+else
+    log "⚠️  No checksum file found"
+fi
+
+if [ "$VERIFY_JSON" = "true" ]; then
+    json_file="$VERIFY_JSON_FILE"
+    if [ -z "$json_file" ]; then
+        if [ -n "$EXPECTED_FILE" ]; then
+            json_file="$EXPECTED_FILE"
+        else
+            shopt -s nullglob
+            json_files=( *.json )
+            shopt -u nullglob
+            if [ "${#json_files[@]}" -eq 0 ]; then
+                log "No JSON files found for validation"
+                exit 1
+            fi
+            json_file="${json_files[0]}"
+        fi
+    fi
+
+    log "Verifying JSON structure: $json_file"
+    if [ ! -f "$json_file" ]; then
+        log "JSON file not found: $json_file"
+        exit 1
+    fi
+    jq empty "$json_file"
+    log "✅ JSON structure is valid"
+fi
+
+log "🎉 All verifications passed for: $OCI_REF"
+log "Verification complete"
