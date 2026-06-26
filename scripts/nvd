@@ -5,7 +5,7 @@ BASE_URL="${BASE_URL:-https://nvd.nist.gov/feeds/json/cve/2.0}"
 START_YEAR="${START_YEAR:-2002}"
 END_YEAR="${END_YEAR:-2026}"
 FEED_DIR="feeds"
-OUTPUT_FILE="nvd_feeds.json.gz"
+OUTPUT_FILE="${OUTPUT_FILE:-merged_nvd_feeds.json.gz}"
 TEMP_DIR=$(mktemp -d)
 VULNS_FILE="$TEMP_DIR/all_vulns.jsonl"
 
@@ -101,7 +101,7 @@ merge_nvd_feeds() {
 }
 
 clean_up() {
-  rm -rf "$FEED_DIR" "$TEMP_DIR"
+  rm -rf "$TEMP_DIR"
 }
 
 trap clean_up EXIT
