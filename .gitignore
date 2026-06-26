@@ -1,3 +1,8 @@
 merged_nvd_feeds.json
+merged_nvd_feeds.json.gz
 merged_nvd_feeds.json.sha256
+merged_nvd_feeds.json.gz.sha256
 merged_nvd_feeds.json.sigstore.json
+merged_nvd_feeds.json.gz.sigstore.json
+feeds/
+nvd-feeds/

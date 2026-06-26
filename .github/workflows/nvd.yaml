@@ -50,10 +50,10 @@ jobs:
         run: |
           bash scripts/sign-nvd-feeds
 
-      - name: Commit NVD feeds
+      - name: Commit OCI reference
         run: |
           git config user.email "github-actions@github.com"
           git config user.name "github-actions"
-          git add feeds/ merged_nvd_feeds.json.gz* nvd-feeds.oci-ref
+          git add nvd-feeds.oci-ref
           git commit -m "update nvd feeds $(date +%Y-%m-%d)" || echo "nothing to commit"
           git push
