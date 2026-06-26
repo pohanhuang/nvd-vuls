@@ -2,85 +2,15 @@
 
 set -euo pipefail
 
-OCI_REPOSITORY="${OCI_REPOSITORY:-}"
-CERTIFICATE_OIDC_ISSUER="${CERTIFICATE_OIDC_ISSUER:-https://token.actions.githubusercontent.com}"
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
-log() {
-    echo "[verify-latest-nvd-feeds] $*" >&2
-}
+VERIFY_JSON="${VERIFY_JSON:-true}"
+EXPECTED_FILE="${EXPECTED_FILE:-merged_nvd_feeds.json}"
+VERIFY_JSON_FILE="${VERIFY_JSON_FILE:-merged_nvd_feeds.json}"
+LOG_PREFIX="${LOG_PREFIX:-verify-latest-nvd-feeds}"
 
-if [ -z "$OCI_REPOSITORY" ]; then
-    if [ -z "${GITHUB_REPOSITORY:-}" ]; then
-        log "OCI_REPOSITORY or GITHUB_REPOSITORY is required"
-        exit 1
-    fi
+if [ -z "${OCI_REPOSITORY:-}" ] && [ -n "${GITHUB_REPOSITORY:-}" ]; then
     OCI_REPOSITORY="ghcr.io/${GITHUB_REPOSITORY}/nvd-feeds"
 fi
 
-OCI_REPOSITORY=$(printf '%s' "$OCI_REPOSITORY" | tr '[:upper:]' '[:lower:]')
-
-if [ -z "${CERTIFICATE_IDENTITY:-}" ]; then
-    log "CERTIFICATE_IDENTITY is required"
-    exit 1
-fi
-
-if ! command -v oras >/dev/null 2>&1; then
-    log "oras is required"
-    exit 1
-fi
-
-if ! command -v cosign >/dev/null 2>&1; then
-    log "cosign is required"
-    exit 1
-fi
-
-# Step 1: Resolve latest tag to digest
-log "Resolving latest tag: ${OCI_REPOSITORY}:latest"
-LATEST_DIGEST=$(oras resolve "${OCI_REPOSITORY}:latest")
-
-if [ -z "$LATEST_DIGEST" ]; then
-    log "Failed to resolve latest tag"
-    exit 1
-fi
-
-OCI_DIGEST_REF="${OCI_REPOSITORY}@${LATEST_DIGEST}"
-log "Resolved to: $OCI_DIGEST_REF"
-
-# Step 2: Verify signature on the digest
-log "Verifying signature on: $OCI_DIGEST_REF"
-cosign verify \
-    --certificate-oidc-issuer "$CERTIFICATE_OIDC_ISSUER" \
-    --certificate-identity "$CERTIFICATE_IDENTITY" \
-    "$OCI_DIGEST_REF" >&2
-
-log "✅ Signature verification passed"
-
-# Step 3: Pull and verify content
-log "Pulling artifact for content verification"
-TEMP_DIR=$(mktemp -d)
-trap "rm -rf $TEMP_DIR" EXIT
-
-cd "$TEMP_DIR"
-oras pull --no-tty "$OCI_DIGEST_REF" >&2
-
-# Step 4: Verify checksum
-log "Verifying checksum"
-if [ -f merged_nvd_feeds.json.sha256 ]; then
-    sha256sum -c merged_nvd_feeds.json.sha256 >&2
-    log "✅ Checksum verification passed"
-else
-    log "⚠️  No checksum file found"
-fi
-
-# Step 5: Verify JSON structure
-log "Verifying JSON structure"
-if [ -f merged_nvd_feeds.json ]; then
-    jq empty merged_nvd_feeds.json
-    log "✅ JSON structure is valid"
-else
-    log "❌ merged_nvd_feeds.json not found"
-    exit 1
-fi
-
-log "🎉 All verifications passed for: $OCI_DIGEST_REF"
-echo "$OCI_DIGEST_REF"
+bash "$SCRIPT_DIR/verify-latest-oci-artifact"
