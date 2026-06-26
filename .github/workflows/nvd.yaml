@@ -3,6 +3,7 @@ name: Update NVD Feeds
 permissions:
   contents: write
   id-token: write
+  packages: write
 
 on:
   schedule:
@@ -24,6 +25,13 @@ jobs:
 
       - uses: sigstore/cosign-installer@v3
 
+      - uses: oras-project/setup-oras@v1
+
+      - name: Log in to GHCR
+        run: |
+          echo "${{ github.token }}" | oras login ghcr.io -u "${{ github.actor }}" --password-stdin
+          echo "${{ github.token }}" | cosign login ghcr.io -u "${{ github.actor }}" --password-stdin
+
       - name: Update NVD feeds
         env:
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
@@ -32,7 +40,13 @@ jobs:
         run: |
           scripts/update-nvd-feeds
 
-      - name: Sign merged NVD feeds
+      - name: Publish merged NVD feeds
+        env:
+          OCI_REPOSITORY: ghcr.io/${{ github.repository }}/nvd-feeds
+        run: |
+          scripts/publish-nvd-feeds
+
+      - name: Sign published NVD feeds
         run: |
           scripts/sign-nvd-feeds
 
@@ -40,6 +54,6 @@ jobs:
         run: |
           git config user.email "github-actions@github.com"
           git config user.name "github-actions"
-          git add nvd-feeds/ merged_nvd_feeds.json merged_nvd_feeds.json.sigstore.json merged_nvd_feeds.json.sha256
+          git add nvd-feeds/ nvd-feeds.oci-ref
           git commit -m "update nvd feeds $(date +%Y-%m-%d)" || echo "nothing to commit"
           git push

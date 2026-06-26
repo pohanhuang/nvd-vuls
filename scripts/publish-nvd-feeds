@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+TARGET_FILE="${TARGET_FILE:-merged_nvd_feeds.json}"
+CHECKSUM_FILE="${CHECKSUM_FILE:-${TARGET_FILE}.sha256}"
+REF_FILE="${REF_FILE:-nvd-feeds.oci-ref}"
+ARTIFACT_TYPE="${ARTIFACT_TYPE:-application/vnd.nvd.feeds.v1+json}"
+OCI_TAG="${OCI_TAG:-$(date -u +%Y%m%d)}"
+
+log() {
+    echo "[publish-nvd-feeds] $*"
+}
+
+write_output() {
+    if [ -n "${GITHUB_OUTPUT:-}" ]; then
+        echo "$1=$2" >> "$GITHUB_OUTPUT"
+    fi
+}
+
+if [ ! -s "$TARGET_FILE" ]; then
+    log "Missing target file: $TARGET_FILE"
+    exit 1
+fi
+
+if ! command -v oras >/dev/null 2>&1; then
+    log "oras is required"
+    exit 1
+fi
+
+if [ -z "${OCI_REPOSITORY:-}" ]; then
+    if [ -z "${GITHUB_REPOSITORY:-}" ]; then
+        log "OCI_REPOSITORY or GITHUB_REPOSITORY is required"
+        exit 1
+    fi
+    OCI_REPOSITORY="ghcr.io/${GITHUB_REPOSITORY}/nvd-feeds"
+fi
+
+OCI_REPOSITORY=$(printf '%s' "$OCI_REPOSITORY" | tr '[:upper:]' '[:lower:]')
+PUSH_REF="${OCI_REPOSITORY}:${OCI_TAG},latest"
+
+log "Writing checksum: $CHECKSUM_FILE"
+sha256sum "$TARGET_FILE" > "$CHECKSUM_FILE"
+
+log "Pushing OCI artifact: $PUSH_REF"
+DIGEST=$(oras push \
+    --artifact-type "$ARTIFACT_TYPE" \
+    --format go-template='{{.digest}}' \
+    "$PUSH_REF" \
+    "$TARGET_FILE:application/json" \
+    "$CHECKSUM_FILE:text/plain")
+
+OCI_DIGEST_REF="${OCI_REPOSITORY}@${DIGEST}"
+printf '%s\n' "$OCI_DIGEST_REF" > "$REF_FILE"
+
+write_output "oci_repository" "$OCI_REPOSITORY"
+write_output "oci_digest" "$DIGEST"
+write_output "oci_ref" "$OCI_DIGEST_REF"
+write_output "oci_tag" "$OCI_TAG"
+
+log "OCI_REF=$OCI_DIGEST_REF"
+log "REF_FILE=$REF_FILE"
+log "Publish complete"
