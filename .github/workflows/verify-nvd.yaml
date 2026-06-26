@@ -1,0 +1,32 @@
+name: Verify NVD Feeds
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows:
+      - Update NVD Feeds
+    types:
+      - completed
+  push:
+    paths:
+      - "merged_nvd_feeds.json"
+      - "merged_nvd_feeds.json.asc"
+      - "merged_nvd_feeds.json.sha256"
+      - "scripts/verify-nvd-feeds"
+      - ".github/workflows/verify-nvd.yaml"
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify merged NVD feeds
+        env:
+          NVD_SIGNING_PUBLIC_KEY: ${{ secrets.NVD_SIGNING_PUBLIC_KEY }}
+        run: |
+          scripts/verify-nvd-feeds

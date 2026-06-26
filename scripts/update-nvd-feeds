@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+BASE_URL="${BASE_URL:-https://nvd.nist.gov/feeds/json/cve/2.0}"
+START_YEAR="${START_YEAR:-2002}"
+END_YEAR="${END_YEAR:-2026}"
+SOURCE_DIR="${SOURCE_DIR:-nvd-feeds}"
+OUTPUT_FILE="${OUTPUT_FILE:-merged_nvd_feeds.json}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+log() {
+    echo "[update-nvd-feeds] $*"
+}
+
+download_feed() {
+    local year="$1"
+    local file="nvdcve-2.0-${year}.json.gz"
+    local url="${BASE_URL}/${file}"
+    local out="${SOURCE_DIR}/${file}"
+    local wget_args=(-O "$out" "$url")
+
+    if [ -n "${NVD_API_KEY:-}" ]; then
+        wget_args=(--header="apiKey: ${NVD_API_KEY}" "${wget_args[@]}")
+    fi
+
+    log "Downloading file=$file year=$year"
+
+    if wget "${wget_args[@]}"; then
+        if [ -s "$out" ]; then
+            local size
+            size=$(du -h "$out" | awk '{print $1}')
+            log "DOWNLOAD_OK file=$file size=$size"
+            return 0
+        fi
+    fi
+
+    log "DOWNLOAD_FAILED file=$file"
+    rm -f "$out"
+    return 1
+}
+
+log "Starting NVD feeds update"
+log "START_YEAR=$START_YEAR"
+log "END_YEAR=$END_YEAR"
+log "SOURCE_DIR=$SOURCE_DIR"
+log "OUTPUT_FILE=$OUTPUT_FILE"
+
+mkdir -p "$SOURCE_DIR"
+
+for year in $(seq "$START_YEAR" "$END_YEAR"); do
+    download_feed "$year"
+done
+
+log "Running post-process pack step"
+SOURCE_DIR="$SOURCE_DIR" OUTPUT_FILE="$OUTPUT_FILE" "$SCRIPT_DIR/pack"
+
+log "Update complete"

@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+TARGET_FILE="${TARGET_FILE:-merged_nvd_feeds.json}"
+SIGNATURE_FILE="${SIGNATURE_FILE:-${TARGET_FILE}.asc}"
+CHECKSUM_FILE="${CHECKSUM_FILE:-${TARGET_FILE}.sha256}"
+
+log() {
+    echo "[sign-nvd-feeds] $*"
+}
+
+if [ ! -s "$TARGET_FILE" ]; then
+    log "Missing target file: $TARGET_FILE"
+    exit 1
+fi
+
+if [ -z "${NVD_SIGNING_KEY:-}" ]; then
+    log "NVD_SIGNING_KEY is required"
+    exit 1
+fi
+
+GNUPGHOME="$(mktemp -d)"
+export GNUPGHOME
+trap 'rm -rf "$GNUPGHOME"' EXIT
+
+log "Importing signing key"
+printf '%s\n' "$NVD_SIGNING_KEY" | gpg --batch --import
+
+KEY_ID=$(gpg --batch --list-secret-keys --with-colons | awk -F: '$1 == "sec" {print $5; exit}')
+if [ -z "$KEY_ID" ]; then
+    log "No secret key found after import"
+    exit 1
+fi
+
+log "Writing checksum: $CHECKSUM_FILE"
+sha256sum "$TARGET_FILE" > "$CHECKSUM_FILE"
+
+log "Writing detached signature: $SIGNATURE_FILE"
+GPG_ARGS=(
+    --batch
+    --yes
+    --pinentry-mode loopback
+    --local-user "$KEY_ID"
+    --armor
+    --detach-sign
+    --output "$SIGNATURE_FILE"
+)
+
+if [ -n "${NVD_SIGNING_KEY_PASSPHRASE:-}" ]; then
+    GPG_ARGS+=(--passphrase "$NVD_SIGNING_KEY_PASSPHRASE")
+fi
+
+gpg "${GPG_ARGS[@]}" "$TARGET_FILE"
+
+log "SIGNATURE_FILE=$SIGNATURE_FILE"
+log "CHECKSUM_FILE=$CHECKSUM_FILE"
+log "Signing complete"
