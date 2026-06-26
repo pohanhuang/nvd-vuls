@@ -38,7 +38,7 @@ jobs:
           START_YEAR: ${{ github.event.inputs.year_start || '2002' }}
           END_YEAR: ${{ github.event.inputs.year_end || '2026' }}
         run: |
-          bash scripts/update-nvd-feeds
+          bash scripts/nvd
 
       - name: Publish merged NVD feeds
         env:
