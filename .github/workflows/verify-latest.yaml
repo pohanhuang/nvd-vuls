@@ -1,4 +1,4 @@
-name: Verify NVD Feeds
+name: Verify Latest NVD Feeds
 
 permissions:
   contents: read
@@ -6,45 +6,61 @@ permissions:
 
 on:
   workflow_dispatch:
+  schedule:
+    # 每天 13:00 UTC 驗證 (在 update 之後 1 小時)
+    - cron: "0 13 * * *"
   workflow_run:
     workflows:
       - Update NVD Feeds
     types:
       - completed
-  push:
-    paths:
-      - "nvd-feeds.oci-ref"
-      - "scripts/verify-nvd-feeds"
-      - ".github/workflows/verify-nvd.yaml"
 
 jobs:
-  verify:
+  verify-latest:
     runs-on: ubuntu-latest
     if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+
+    outputs:
+      oci_digest: ${{ steps.verify.outputs.oci_digest }}
+      verified: ${{ steps.verify.outcome == 'success' }}
+
     steps:
       - uses: actions/checkout@v4
 
       - uses: sigstore/cosign-installer@v3
 
+      - uses: oras-project/setup-oras@v1
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
       - name: Log in to GHCR
         run: |
           echo "${{ github.token }}" | cosign login ghcr.io -u "${{ github.actor }}" --password-stdin
 
-      - name: Verify merged NVD feeds
+      - name: Verify latest NVD feeds
         id: verify
         env:
+          OCI_REPOSITORY: ghcr.io/${{ github.repository }}/nvd-feeds
           CERTIFICATE_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/nvd.yaml@refs/heads/${{ github.event.repository.default_branch }}
         run: |
-          bash scripts/verify-nvd-feeds
-          OCI_REF=$(cat nvd-feeds.oci-ref)
+          OCI_DIGEST_REF=$(bash scripts/verify-latest-nvd-feeds)
+          echo "oci_digest=${OCI_DIGEST_REF}" >> "$GITHUB_OUTPUT"
           echo "### ✅ Verification Successful" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Verified Image:** \`${OCI_REF}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Verified Image:** \`${OCI_DIGEST_REF}\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Report verification result
+        if: success()
+        run: |
+          echo "✅ Latest NVD feeds verified successfully"
+          echo "Repository: ghcr.io/${{ github.repository }}/nvd-feeds:latest"
+          echo "Digest: ${{ steps.verify.outputs.oci_digest }}"
 
       - name: Notify on failure
         if: failure()
         run: |
-          echo "::error::❌ Verification failed"
+          echo "::error::❌ Verification failed for ghcr.io/${{ github.repository }}/nvd-feeds:latest"
           echo "### ❌ Verification Failed" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "Please check the logs for details." >> "$GITHUB_STEP_SUMMARY"
