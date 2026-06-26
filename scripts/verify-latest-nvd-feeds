@@ -36,7 +36,7 @@ fi
 
 # Step 1: Resolve latest tag to digest
 log "Resolving latest tag: ${OCI_REPOSITORY}:latest"
-LATEST_DIGEST=$(oras resolve "${OCI_REPOSITORY}:latest" --format go-template='{{.digest}}')
+LATEST_DIGEST=$(oras resolve "${OCI_REPOSITORY}:latest")
 
 if [ -z "$LATEST_DIGEST" ]; then
     log "Failed to resolve latest tag"
