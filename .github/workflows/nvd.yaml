@@ -38,17 +38,17 @@ jobs:
           START_YEAR: ${{ github.event.inputs.year_start || '2002' }}
           END_YEAR: ${{ github.event.inputs.year_end || '2026' }}
         run: |
-          scripts/update-nvd-feeds
+          bash scripts/update-nvd-feeds
 
       - name: Publish merged NVD feeds
         env:
           OCI_REPOSITORY: ghcr.io/${{ github.repository }}/nvd-feeds
         run: |
-          scripts/publish-nvd-feeds
+          bash scripts/publish-nvd-feeds
 
       - name: Sign published NVD feeds
         run: |
-          scripts/sign-nvd-feeds
+          bash scripts/sign-nvd-feeds
 
       - name: Commit NVD feeds
         run: |
